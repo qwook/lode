@@ -1,0 +1,124 @@
+#!/usr/bin/env lua
+
+-- Lode
+-- by Henry Tran
+-- Goal: to be able to use itself later and remove all the "primitive" crap.
+
+-- grab the delimiter. '/' on unix and '\' on windows
+local delimiter = package.config:sub(1, 1)
+-- grab the path of this file
+local localPath = (debug.getinfo(1).short_src):match("^(.*[" ..delimiter .. "])[^" ..delimiter .. "]+$") or ""
+
+-- load files primitively
+-- should be replaced when lua2c is used
+function lodePrimitive(filename)
+
+    local f = io.open(localPath .. "lode_modules" .. delimiter .. filename .. ".lua", "r")
+    if not f then error("No file named " .. filename) end
+
+    local source = f:read("*a")
+    f:close()
+
+    local fn = loadstring(source, "@" .. filename)
+    return fn()
+
+end
+
+local pathlib = lodePrimitive("path")
+local packages = {}
+
+function require_(path)
+
+    local localPath = (debug.getinfo(2).source):match("^(.*[" ..delimiter .. "])[^" ..delimiter .. "]+$") or "."
+    local filename = ""
+    local f
+
+    repeat
+        -- easy peasy, its a local file/folder.
+        if (path:sub(1, 2) == "./" or path:sub(1, 3) == "../") then
+            path = path:gsub("/", delimiter) -- for windows systems
+
+            -- check if its a folder
+            filename = pathlib.join( path, "init.lua" )
+            f = io.open(filename, "r")
+            if f then
+                break
+            end
+
+            -- check if its a file w/ extension
+            filename = path
+            f = io.open(filename, "r")
+            if f then
+                break
+            end
+
+            -- check if its a file w/o extension
+            filename = path .. ".lua"
+            f = io.open(filename, "r")
+            if f then
+                break
+            end
+        else
+            local paths = pathlib.parse(localPath)
+            while (#paths > 0) do
+                local module_path = pathlib.join(paths)
+
+                -- open the module
+                -- todo: have a package.lson
+                filename = pathlib.join( module_path, "lode_modules", path, "init.lua" )
+                f = io.open(filename, "r")
+                if f then
+                    break
+                end
+
+                table.remove(paths, #paths)
+            end
+            if f then break end
+        end
+    until error("File not found " .. path, 2)
+
+    if packages[filename] then
+        if f then f:close() end
+        return unpack(packages[filename])
+    end
+
+    -- load the string and run it!
+    local source = f:read("*a")
+    f:close()
+
+    local fn = loadstring(source, filename)
+
+    local env = {
+        require = require_,
+        print = print
+    }
+
+    setfenv(fn, env)
+
+    packages[filename] = {fn()}
+
+    return unpack(packages[filename])
+
+end
+
+function lode(filename)
+
+    local f = io.open(filename, "r")
+    if not f then error("No file named " .. filename, 2) end
+    local source = f:read("*a")
+    f:close()
+
+    local fn = loadstring(source, filename)
+
+    local env = {
+        require = require_,
+        print = print
+    }
+
+    setfenv(fn, env)
+
+    return fn()
+
+end
+
+lode(({...})[1])
