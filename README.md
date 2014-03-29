@@ -2,7 +2,7 @@
 Very much a work-in-progress.
 
 ## Useage:
-    `./lode <filename.lua>`
+`./lode <filename.lua>`
 
 ## Traversing through relative files.
     require("./file")
